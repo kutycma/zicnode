@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wyx2685/v2node/common/counter"
-	"github.com/wyx2685/v2node/common/rate"
-	"github.com/wyx2685/v2node/limiter"
+	"github.com/ZicBoard/ZicNode/common/counter"
+	"github.com/ZicBoard/ZicNode/common/rate"
+	"github.com/ZicBoard/ZicNode/limiter"
 
 	"github.com/xtls/xray-core/app/dispatcher"
 	"github.com/xtls/xray-core/common"

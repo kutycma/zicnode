@@ -198,18 +198,18 @@ install_base() {
 
 # 0: running, 1: not running, 2: not installed
 check_status() {
-    if [[ ! -f /usr/local/v2node/v2node ]]; then
+    if [[ ! -f /usr/local/zicnode/zicnode ]]; then
         return 2
     fi
     if [[ x"${release}" == x"alpine" ]]; then
-        temp=$(service v2node status | awk '{print $3}')
+        temp=$(service zicnode status | awk '{print $3}')
         if [[ x"${temp}" == x"started" ]]; then
             return 0
         else
             return 1
         fi
     else
-        temp=$(systemctl status v2node | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
+        temp=$(systemctl status zicnode | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
         if [[ x"${temp}" == x"running" ]]; then
             return 0
         else
@@ -218,13 +218,13 @@ check_status() {
     fi
 }
 
-generate_v2node_config() {
+generate_zicnode_config() {
         local api_host="$1"
         local node_id="$2"
         local api_key="$3"
 
-        mkdir -p /etc/v2node >/dev/null 2>&1
-        cat > /etc/v2node/config.json <<EOF
+        mkdir -p /etc/zicnode >/dev/null 2>&1
+        cat > /etc/zicnode/config.json <<EOF
 {
     "Log": {
         "Level": "warning",
@@ -241,87 +241,87 @@ generate_v2node_config() {
     ]
 }
 EOF
-        echo -e "${green}V2node 配置文件生成完成,正在重新启动服务${plain}"
+        echo -e "${green}ZicNode 配置文件生成完成,正在重新启动服务${plain}"
         if [[ x"${release}" == x"alpine" ]]; then
-            service v2node restart
+            service zicnode restart
         else
-            systemctl restart v2node
+            systemctl restart zicnode
         fi
         sleep 2
         check_status
         echo -e ""
         if [[ $? == 0 ]]; then
-            echo -e "${green}v2node 重启成功${plain}"
+            echo -e "${green}zicnode 重启成功${plain}"
         else
-            echo -e "${red}v2node 可能启动失败，请使用 v2node log 查看日志信息${plain}"
+            echo -e "${red}zicnode 可能启动失败，请使用 zicnode log 查看日志信息${plain}"
         fi
 }
 
-install_v2node() {
+install_zicnode() {
     local version_param="$1"
-    if [[ -e /usr/local/v2node/ ]]; then
-        rm -rf /usr/local/v2node/
+    if [[ -e /usr/local/zicnode/ ]]; then
+        rm -rf /usr/local/zicnode/
     fi
 
-    mkdir /usr/local/v2node/ -p
-    cd /usr/local/v2node/
+    mkdir /usr/local/zicnode/ -p
+    cd /usr/local/zicnode/
 
     if  [[ -z "$version_param" ]] ; then
-        last_version=$(curl -Ls "https://api.github.com/repos/wyx2685/v2node/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        last_version=$(curl -Ls "https://api.github.com/repos/ZicBoard/ZicNode/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         if [[ ! -n "$last_version" ]]; then
-            echo -e "${red}检测 v2node 版本失败，可能是超出 Github API 限制，请稍后再试，或手动指定 v2node 版本安装${plain}"
+            echo -e "${red}检测 zicnode 版本失败，可能是超出 Github API 限制，请稍后再试，或手动指定 zicnode 版本安装${plain}"
             exit 1
         fi
         echo -e "${green}检测到最新版本：${last_version}，开始安装...${plain}"
-        url="https://github.com/wyx2685/v2node/releases/download/${last_version}/v2node-linux-${arch}.zip"
-        curl -sL "$url" | pv -s 30M -W -N "下载进度" > /usr/local/v2node/v2node-linux.zip
+        url="https://github.com/ZicBoard/ZicNode/releases/download/${last_version}/zicnode-linux-${arch}.zip"
+        curl -sL "$url" | pv -s 30M -W -N "下载进度" > /usr/local/zicnode/zicnode-linux.zip
         if [[ $? -ne 0 ]]; then
-            echo -e "${red}下载 v2node 失败，请确保你的服务器能够下载 Github 的文件${plain}"
+            echo -e "${red}下载 zicnode 失败，请确保你的服务器能够下载 Github 的文件${plain}"
             exit 1
         fi
     else
     last_version=$version_param
-        url="https://github.com/wyx2685/v2node/releases/download/${last_version}/v2node-linux-${arch}.zip"
-        curl -sL "$url" | pv -s 30M -W -N "下载进度" > /usr/local/v2node/v2node-linux.zip
+        url="https://github.com/ZicBoard/ZicNode/releases/download/${last_version}/zicnode-linux-${arch}.zip"
+        curl -sL "$url" | pv -s 30M -W -N "下载进度" > /usr/local/zicnode/zicnode-linux.zip
         if [[ $? -ne 0 ]]; then
-            echo -e "${red}下载 v2node $1 失败，请确保此版本存在${plain}"
+            echo -e "${red}下载 zicnode $1 失败，请确保此版本存在${plain}"
             exit 1
         fi
     fi
 
-    unzip v2node-linux.zip
-    rm v2node-linux.zip -f
-    chmod +x v2node
-    mkdir /etc/v2node/ -p
-    cp geoip.dat /etc/v2node/
-    cp geosite.dat /etc/v2node/
+    unzip zicnode-linux.zip
+    rm zicnode-linux.zip -f
+    chmod +x zicnode
+    mkdir /etc/zicnode/ -p
+    cp geoip.dat /etc/zicnode/
+    cp geosite.dat /etc/zicnode/
     if [[ x"${release}" == x"alpine" ]]; then
-        rm /etc/init.d/v2node -f
-        cat <<EOF > /etc/init.d/v2node
+        rm /etc/init.d/zicnode -f
+        cat <<EOF > /etc/init.d/zicnode
 #!/sbin/openrc-run
 
-name="v2node"
-description="v2node"
+name="zicnode"
+description="zicnode"
 
-command="/usr/local/v2node/v2node"
+command="/usr/local/zicnode/zicnode"
 command_args="server"
 command_user="root"
 
-pidfile="/run/v2node.pid"
+pidfile="/run/zicnode.pid"
 command_background="yes"
 
 depend() {
         need net
 }
 EOF
-        chmod +x /etc/init.d/v2node
-        rc-update add v2node default
-        echo -e "${green}v2node ${last_version}${plain} 安装完成，已设置开机自启"
+        chmod +x /etc/init.d/zicnode
+        rc-update add zicnode default
+        echo -e "${green}zicnode ${last_version}${plain} 安装完成，已设置开机自启"
     else
-        rm /etc/systemd/system/v2node.service -f
-        cat <<EOF > /etc/systemd/system/v2node.service
+        rm /etc/systemd/system/zicnode.service -f
+        cat <<EOF > /etc/systemd/system/zicnode.service
 [Unit]
-Description=v2node Service
+Description=zicnode Service
 After=network.target nss-lookup.target
 Wants=network.target
 
@@ -333,8 +333,8 @@ LimitAS=infinity
 LimitRSS=infinity
 LimitCORE=infinity
 LimitNOFILE=999999
-WorkingDirectory=/usr/local/v2node/
-ExecStart=/usr/local/v2node/v2node server
+WorkingDirectory=/usr/local/zicnode/
+ExecStart=/usr/local/zicnode/zicnode server
 Restart=always
 RestartSec=10
 
@@ -342,66 +342,66 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
         systemctl daemon-reload
-        systemctl stop v2node
-        systemctl enable v2node
-        echo -e "${green}v2node ${last_version}${plain} 安装完成，已设置开机自启"
+        systemctl stop zicnode
+        systemctl enable zicnode
+        echo -e "${green}zicnode ${last_version}${plain} 安装完成，已设置开机自启"
     fi
 
-    if [[ ! -f /etc/v2node/config.json ]]; then
+    if [[ ! -f /etc/zicnode/config.json ]]; then
         # 如果通过 CLI 传入了完整参数，则直接生成配置并跳过交互
         if [[ -n "$API_HOST_ARG" && -n "$NODE_ID_ARG" && -n "$API_KEY_ARG" ]]; then
-            generate_v2node_config "$API_HOST_ARG" "$NODE_ID_ARG" "$API_KEY_ARG"
-            echo -e "${green}已根据参数生成 /etc/v2node/config.json${plain}"
+            generate_zicnode_config "$API_HOST_ARG" "$NODE_ID_ARG" "$API_KEY_ARG"
+            echo -e "${green}已根据参数生成 /etc/zicnode/config.json${plain}"
             first_install=false
         else
-            cp config.json /etc/v2node/
+            cp config.json /etc/zicnode/
             first_install=true
         fi
     else
         if [[ x"${release}" == x"alpine" ]]; then
-            service v2node start
+            service zicnode start
         else
-            systemctl start v2node
+            systemctl start zicnode
         fi
         sleep 2
         check_status
         echo -e ""
         if [[ $? == 0 ]]; then
-            echo -e "${green}v2node 重启成功${plain}"
+            echo -e "${green}zicnode 重启成功${plain}"
         else
-            echo -e "${red}v2node 可能启动失败，请使用 v2node log 查看日志信息${plain}"
+            echo -e "${red}zicnode 可能启动失败，请使用 zicnode log 查看日志信息${plain}"
         fi
         first_install=false
     fi
 
 
-    curl -o /usr/bin/v2node -Ls https://raw.githubusercontent.com/wyx2685/v2node/main/script/v2node.sh
-    chmod +x /usr/bin/v2node
+    curl -o /usr/bin/zicnode -Ls https://raw.githubusercontent.com/ZicBoard/ZicNode/master/script/zicnode.sh
+    chmod +x /usr/bin/zicnode
 
     cd $cur_dir
     rm -f install.sh
     echo "------------------------------------------"
     echo -e "管理脚本使用方法: "
     echo "------------------------------------------"
-    echo "v2node              - 显示管理菜单 (功能更多)"
-    echo "v2node start        - 启动 v2node"
-    echo "v2node stop         - 停止 v2node"
-    echo "v2node restart      - 重启 v2node"
-    echo "v2node status       - 查看 v2node 状态"
-    echo "v2node enable       - 设置 v2node 开机自启"
-    echo "v2node disable      - 取消 v2node 开机自启"
-    echo "v2node log          - 查看 v2node 日志"
-    echo "v2node generate     - 生成 v2node 配置文件"
-    echo "v2node update       - 更新 v2node"
-    echo "v2node update x.x.x - 更新 v2node 指定版本"
-    echo "v2node install      - 安装 v2node"
-    echo "v2node uninstall    - 卸载 v2node"
-    echo "v2node version      - 查看 v2node 版本"
+    echo "zicnode              - 显示管理菜单 (功能更多)"
+    echo "zicnode start        - 启动 zicnode"
+    echo "zicnode stop         - 停止 zicnode"
+    echo "zicnode restart      - 重启 zicnode"
+    echo "zicnode status       - 查看 zicnode 状态"
+    echo "zicnode enable       - 设置 zicnode 开机自启"
+    echo "zicnode disable      - 取消 zicnode 开机自启"
+    echo "zicnode log          - 查看 zicnode 日志"
+    echo "zicnode generate     - 生成 zicnode 配置文件"
+    echo "zicnode update       - 更新 zicnode"
+    echo "zicnode update x.x.x - 更新 zicnode 指定版本"
+    echo "zicnode install      - 安装 zicnode"
+    echo "zicnode uninstall    - 卸载 zicnode"
+    echo "zicnode version      - 查看 zicnode 版本"
     echo "------------------------------------------"
     curl -fsS --max-time 10 "https://api.v-50.me/counter" || true
 
     if [[ $first_install == true ]]; then
-        read -rp "检测到你为第一次安装 v2node，是否自动生成 /etc/v2node/config.json？(y/n): " if_generate
+        read -rp "检测到你为第一次安装 zicnode，是否自动生成 /etc/zicnode/config.json？(y/n): " if_generate
         if [[ "$if_generate" =~ ^[Yy]$ ]]; then
             # 交互式收集参数，提供示例默认值
             read -rp "面板API地址[格式: https://example.com/]: " api_host
@@ -411,9 +411,9 @@ EOF
             read -rp "节点通讯密钥: " api_key
 
             # 生成配置文件（覆盖可能从包中复制的模板）
-            generate_v2node_config "$api_host" "$node_id" "$api_key"
+            generate_zicnode_config "$api_host" "$node_id" "$api_key"
         else
-            echo "${green}已跳过自动生成配置。如需后续生成，可执行: v2node generate${plain}"
+            echo "${green}已跳过自动生成配置。如需后续生成，可执行: zicnode generate${plain}"
         fi
     fi
 }
@@ -421,4 +421,4 @@ EOF
 parse_args "$@"
 echo -e "${green}开始安装${plain}"
 install_base
-install_v2node "$VERSION_ARG"
+install_zicnode "$VERSION_ARG"

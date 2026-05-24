@@ -12,8 +12,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/ZicBoard/ZicNode/common/file"
 	log "github.com/sirupsen/logrus"
-	"github.com/wyx2685/v2node/common/file"
 )
 
 func (c *Controller) renewCertTask(_ context.Context) error {

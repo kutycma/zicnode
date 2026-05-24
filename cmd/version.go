@@ -8,8 +8,8 @@ import (
 
 var (
 	version  = "TempVersion" //use ldflags replace
-	codename = "v2node"
-	intro    = "A V2board backend based on modified xray-core"
+	codename = "ZicNode"
+	intro    = "A ZicBoard backend based on modified xray-core"
 )
 
 var versionCommand = cobra.Command{

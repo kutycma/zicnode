@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	panel "github.com/wyx2685/v2node/api/v2board"
-	"github.com/wyx2685/v2node/common/format"
-	"github.com/wyx2685/v2node/common/rate"
+	panel "github.com/ZicBoard/ZicNode/api/zicboard"
+	"github.com/ZicBoard/ZicNode/common/format"
+	"github.com/ZicBoard/ZicNode/common/rate"
 )
 
 var limitLock sync.RWMutex

@@ -1,4 +1,4 @@
-module github.com/wyx2685/v2node
+module github.com/ZicBoard/ZicNode
 
 go 1.26.1
 
