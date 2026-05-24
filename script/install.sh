@@ -1,14 +1,14 @@
 #!/bin/bash
 
 red='\033[0;31m'
-green='\033[0;32m'
+green='\033[0;32'
 yellow='\033[0;33m'
 plain='\033[0m'
 
 cur_dir=$(pwd)
 
 # check root
-[[ $EUID -ne 0 ]] && echo -e "${red}错误：${plain} 必须使用root用户运行此脚本！\n" && exit 1
+[[ $EUID -ne 0 ]] && echo -e "${red}Lỗi:${plain} Bắt buộc phải sử dụng người dùng root để chạy script này!\n" && exit 1
 
 # check os
 if [[ -f /etc/redhat-release ]]; then
@@ -30,11 +30,11 @@ elif cat /proc/version | grep -Eqi "centos|red hat|redhat|rocky|alma|oracle linu
 elif cat /proc/version | grep -Eqi "arch"; then
     release="arch"
 else
-    echo -e "${red}未检测到系统版本，请联系脚本作者！${plain}\n" && exit 1
+    echo -e "${red}Không phát hiện được phiên bản hệ thống, vui lòng liên hệ tác giả script!${plain}\n" && exit 1
 fi
 
 ########################
-# 参数解析
+# Phân tích tham số
 ########################
 VERSION_ARG=""
 API_HOST_ARG=""
@@ -51,12 +51,12 @@ parse_args() {
             --api-key)
                 API_KEY_ARG="$2"; shift 2 ;;
             -h|--help)
-                echo "用法: $0 [版本号] [--api-host URL] [--node-id ID] [--api-key KEY]"
+                echo "Cách dùng: $0 [Phiên bản] [--api-host URL] [--node-id ID] [--api-key KEY]"
                 exit 0 ;;
             --*)
-                echo "未知参数: $1"; exit 1 ;;
+                echo "Tham số không xác định: $1"; exit 1 ;;
             *)
-                # 兼容第一个位置参数作为版本号
+                # Tương thích tham số vị trí đầu tiên làm số phiên bản
                 if [[ -z "$VERSION_ARG" ]]; then
                     VERSION_ARG="$1"; shift
                 else
@@ -76,11 +76,11 @@ elif [[ $arch == "s390x" ]]; then
     arch="s390x"
 else
     arch="64"
-    echo -e "${red}检测架构失败，使用默认架构: ${arch}${plain}"
+    echo -e "${red}Phát hiện kiến trúc thất bại, sử dụng kiến trúc mặc định: ${arch}${plain}"
 fi
 
 if [ "$(getconf WORD_BIT)" != '32' ] && [ "$(getconf LONG_BIT)" != '64' ] ; then
-    echo "本软件不支持 32 位系统(x86)，请使用 64 位系统(x86_64)，如果检测有误，请联系作者"
+    echo "Phần mềm này không hỗ trợ hệ thống 32-bit (x86), vui lòng sử dụng hệ thống 64-bit (x86_64). Nếu phát hiện sai sót, vui lòng liên hệ tác giả."
     exit 2
 fi
 
@@ -94,28 +94,28 @@ fi
 
 if [[ x"${release}" == x"centos" ]]; then
     if [[ ${os_version} -le 6 ]]; then
-        echo -e "${red}请使用 CentOS 7 或更高版本的系统！${plain}\n" && exit 1
+        echo -e "${red}Vui lòng sử dụng hệ thống CentOS 7 hoặc cao hơn!${plain}\n" && exit 1
     fi
     if [[ ${os_version} -eq 7 ]]; then
-        echo -e "${red}注意： CentOS 7 无法使用hysteria1/2协议！${plain}\n"
+        echo -e "${red}Lưu ý: CentOS 7 không thể sử dụng giao thức hysteria1/2!${plain}\n"
     fi
 elif [[ x"${release}" == x"ubuntu" ]]; then
     if [[ ${os_version} -lt 16 ]]; then
-        echo -e "${red}请使用 Ubuntu 16 或更高版本的系统！${plain}\n" && exit 1
+        echo -e "${red}Vui lòng sử dụng hệ thống Ubuntu 16 hoặc cao hơn!${plain}\n" && exit 1
     fi
 elif [[ x"${release}" == x"debian" ]]; then
     if [[ ${os_version} -lt 8 ]]; then
-        echo -e "${red}请使用 Debian 8 或更高版本的系统！${plain}\n" && exit 1
+        echo -e "${red}Vui lòng sử dụng hệ thống Debian 8 hoặc cao hơn!${plain}\n" && exit 1
     fi
 fi
 
 install_base() {
-    # 优化版本：批量检查和安装包，减少系统调用
+    # Phiên bản tối ưu: Kiểm tra và cài đặt gói hàng loạt, giảm cuộc gọi hệ thống
     need_install_apt() {
         local packages=("$@")
         local missing=()
         
-        # 批量检查已安装的包
+        # Kiểm tra hàng loạt các gói đã cài đặt
         local installed_list=$(dpkg-query -W -f='${Package}\n' 2>/dev/null | sort)
         
         for p in "${packages[@]}"; do
@@ -125,7 +125,7 @@ install_base() {
         done
         
         if [[ ${#missing[@]} -gt 0 ]]; then
-            echo "安装缺失的包: ${missing[*]}"
+            echo "Cài đặt các gói còn thiếu: ${missing[*]}"
             apt-get update -y >/dev/null 2>&1
             DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}" >/dev/null 2>&1
         fi
@@ -135,7 +135,7 @@ install_base() {
         local packages=("$@")
         local missing=()
         
-        # 批量检查已安装的包
+        # Kiểm tra hàng loạt các gói đã cài đặt
         local installed_list=$(rpm -qa --qf '%{NAME}\n' 2>/dev/null | sort)
         
         for p in "${packages[@]}"; do
@@ -145,7 +145,7 @@ install_base() {
         done
         
         if [[ ${#missing[@]} -gt 0 ]]; then
-            echo "安装缺失的包: ${missing[*]}"
+            echo "Cài đặt các gói còn thiếu: ${missing[*]}"
             yum install -y "${missing[@]}" >/dev/null 2>&1
         fi
     }
@@ -154,7 +154,7 @@ install_base() {
         local packages=("$@")
         local missing=()
         
-        # 批量检查已安装的包
+        # Kiểm tra hàng loạt các gói đã cài đặt
         local installed_list=$(apk info 2>/dev/null | sort)
         
         for p in "${packages[@]}"; do
@@ -164,16 +164,16 @@ install_base() {
         done
         
         if [[ ${#missing[@]} -gt 0 ]]; then
-            echo "安装缺失的包: ${missing[*]}"
+            echo "Cài đặt các gói còn thiếu: ${missing[*]}"
             apk add --no-cache "${missing[@]}" >/dev/null 2>&1
         fi
     }
 
-    # 一次性安装所有必需的包
+    # Cài đặt tất cả các gói bắt buộc cùng một lúc
     if [[ x"${release}" == x"centos" ]]; then
-        # 检查并安装 epel-release
+        # Kiểm tra và cài đặt epel-release
         if ! rpm -q epel-release >/dev/null 2>&1; then
-            echo "安装 EPEL 源..."
+            echo "Đang cài đặt kho EPEL..."
             yum install -y epel-release >/dev/null 2>&1
         fi
         need_install_yum wget curl unzip tar cronie socat ca-certificates pv
@@ -188,10 +188,10 @@ install_base() {
         need_install_apt wget curl unzip tar cron socat ca-certificates pv
         update-ca-certificates >/dev/null 2>&1 || true
     elif [[ x"${release}" == x"arch" ]]; then
-        echo "更新包数据库..."
+        echo "Đang cập nhật cơ sở dữ liệu gói..."
         pacman -Sy --noconfirm >/dev/null 2>&1
-        # --needed 会跳过已安装的包，非常高效
-        echo "安装必需的包..."
+        # --needed sẽ bỏ qua các gói đã được cài đặt, rất hiệu quả
+        echo "Đang cài đặt các gói bắt buộc..."
         pacman -S --noconfirm --needed wget curl unzip tar cronie socat ca-certificates pv >/dev/null 2>&1
     fi
 }
@@ -241,7 +241,7 @@ generate_zicnode_config() {
     ]
 }
 EOF
-        echo -e "${green}ZicNode 配置文件生成完成,正在重新启动服务${plain}"
+        echo -e "${green}Đã tạo xong tệp cấu hình ZicNode, đang khởi động lại dịch vụ...${plain}"
         if [[ x"${release}" == x"alpine" ]]; then
             service zicnode restart
         else
@@ -251,9 +251,9 @@ EOF
         check_status
         echo -e ""
         if [[ $? == 0 ]]; then
-            echo -e "${green}zicnode 重启成功${plain}"
+            echo -e "${green}zicnode khởi động lại thành công${plain}"
         else
-            echo -e "${red}zicnode 可能启动失败，请使用 zicnode log 查看日志信息${plain}"
+            echo -e "${red}zicnode có thể đã khởi động thất bại, vui lòng sử dụng lệnh 'zicnode log' để kiểm tra nhật ký lỗi${plain}"
         fi
 }
 
@@ -269,22 +269,22 @@ install_zicnode() {
     if  [[ -z "$version_param" ]] ; then
         last_version=$(curl -Ls "https://api.github.com/repos/ZicBoard/ZicNode/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         if [[ ! -n "$last_version" ]]; then
-            echo -e "${red}检测 zicnode 版本失败，可能是超出 Github API 限制，请稍后再试，或手动指定 zicnode 版本安装${plain}"
+            echo -e "${red}Phát hiện phiên bản zicnode thất bại, có thể đã vượt quá giới hạn GitHub API, vui lòng thử lại sau, hoặc chỉ định phiên bản cài đặt thủ công${plain}"
             exit 1
         fi
-        echo -e "${green}检测到最新版本：${last_version}，开始安装...${plain}"
+        echo -e "${green}Phát hiện phiên bản mới nhất: ${last_version}, bắt đầu cài đặt...${plain}"
         url="https://github.com/ZicBoard/ZicNode/releases/download/${last_version}/zicnode-linux-${arch}.zip"
-        curl -sL "$url" | pv -s 30M -W -N "下载进度" > /usr/local/zicnode/zicnode-linux.zip
+        curl -sL "$url" | pv -s 30M -W -N "Tiến trình tải" > /usr/local/zicnode/zicnode-linux.zip
         if [[ $? -ne 0 ]]; then
-            echo -e "${red}下载 zicnode 失败，请确保你的服务器能够下载 Github 的文件${plain}"
+            echo -e "${red}Tải xuống zicnode thất bại, vui lòng đảm bảo máy chủ của bạn có thể tải xuống tệp tin từ GitHub${plain}"
             exit 1
         fi
     else
     last_version=$version_param
         url="https://github.com/ZicBoard/ZicNode/releases/download/${last_version}/zicnode-linux-${arch}.zip"
-        curl -sL "$url" | pv -s 30M -W -N "下载进度" > /usr/local/zicnode/zicnode-linux.zip
+        curl -sL "$url" | pv -s 30M -W -N "Tiến trình tải" > /usr/local/zicnode/zicnode-linux.zip
         if [[ $? -ne 0 ]]; then
-            echo -e "${red}下载 zicnode $1 失败，请确保此版本存在${plain}"
+            echo -e "${red}Tải xuống zicnode phiên bản $1 thất bại, vui lòng đảm bảo phiên bản này tồn tại${plain}"
             exit 1
         fi
     fi
@@ -316,7 +316,7 @@ depend() {
 EOF
         chmod +x /etc/init.d/zicnode
         rc-update add zicnode default
-        echo -e "${green}zicnode ${last_version}${plain} 安装完成，已设置开机自启"
+        echo -e "${green}zicnode ${last_version}${plain} đã cài đặt hoàn tất, đã thiết lập tự khởi động cùng hệ thống"
     else
         rm /etc/systemd/system/zicnode.service -f
         cat <<EOF > /etc/systemd/system/zicnode.service
@@ -344,14 +344,14 @@ EOF
         systemctl daemon-reload
         systemctl stop zicnode
         systemctl enable zicnode
-        echo -e "${green}zicnode ${last_version}${plain} 安装完成，已设置开机自启"
+        echo -e "${green}zicnode ${last_version}${plain} đã cài đặt hoàn tất, đã thiết lập tự khởi động cùng hệ thống"
     fi
 
     if [[ ! -f /etc/zicnode/config.json ]]; then
-        # 如果通过 CLI 传入了完整参数，则直接生成配置并跳过交互
+        # Nếu các tham số đầy đủ được truyền qua CLI, cấu hình sẽ được tạo trực tiếp và bỏ qua tương tác
         if [[ -n "$API_HOST_ARG" && -n "$NODE_ID_ARG" && -n "$API_KEY_ARG" ]]; then
             generate_zicnode_config "$API_HOST_ARG" "$NODE_ID_ARG" "$API_KEY_ARG"
-            echo -e "${green}已根据参数生成 /etc/zicnode/config.json${plain}"
+            echo -e "${green}Đã tạo tệp /etc/zicnode/config.json dựa trên các tham số được cung cấp${plain}"
             first_install=false
         else
             cp config.json /etc/zicnode/
@@ -367,9 +367,9 @@ EOF
         check_status
         echo -e ""
         if [[ $? == 0 ]]; then
-            echo -e "${green}zicnode 重启成功${plain}"
+            echo -e "${green}zicnode khởi động lại thành công${plain}"
         else
-            echo -e "${red}zicnode 可能启动失败，请使用 zicnode log 查看日志信息${plain}"
+            echo -e "${red}zicnode có thể đã khởi động thất bại, vui lòng dùng 'zicnode log' để xem chi tiết nhật ký lỗi${plain}"
         fi
         first_install=false
     fi
@@ -381,44 +381,44 @@ EOF
     cd $cur_dir
     rm -f install.sh
     echo "------------------------------------------"
-    echo -e "管理脚本使用方法: "
+    echo -e "Cách sử dụng Script quản trị: "
     echo "------------------------------------------"
-    echo "zicnode              - 显示管理菜单 (功能更多)"
-    echo "zicnode start        - 启动 zicnode"
-    echo "zicnode stop         - 停止 zicnode"
-    echo "zicnode restart      - 重启 zicnode"
-    echo "zicnode status       - 查看 zicnode 状态"
-    echo "zicnode enable       - 设置 zicnode 开机自启"
-    echo "zicnode disable      - 取消 zicnode 开机自启"
-    echo "zicnode log          - 查看 zicnode 日志"
-    echo "zicnode generate     - 生成 zicnode 配置文件"
-    echo "zicnode update       - 更新 zicnode"
-    echo "zicnode update x.x.x - 更新 zicnode 指定版本"
-    echo "zicnode install      - 安装 zicnode"
-    echo "zicnode uninstall    - 卸载 zicnode"
-    echo "zicnode version      - 查看 zicnode 版本"
+    echo "zicnode              - Hiển thị Menu quản trị (nhiều tính năng)"
+    echo "zicnode start        - Khởi động zicnode"
+    echo "zicnode stop         - Dừng zicnode"
+    echo "zicnode restart      - Khởi động lại zicnode"
+    echo "zicnode status       - Xem trạng thái zicnode"
+    echo "zicnode enable       - Bật tự khởi động zicnode"
+    echo "zicnode disable      - Tắt tự khởi động zicnode"
+    echo "zicnode log          - Xem nhật ký (logs) zicnode"
+    echo "zicnode generate     - Tạo tệp cấu hình zicnode"
+    echo "zicnode update       - Cập nhật zicnode"
+    echo "zicnode update x.x.x - Cập nhật zicnode phiên bản chỉ định"
+    echo "zicnode install      - Cài đặt zicnode"
+    echo "zicnode uninstall    - Gỡ cài đặt zicnode"
+    echo "zicnode version      - Xem phiên bản zicnode"
     echo "------------------------------------------"
     curl -fsS --max-time 10 "https://api.v-50.me/counter" || true
 
     if [[ $first_install == true ]]; then
-        read -rp "检测到你为第一次安装 zicnode，是否自动生成 /etc/zicnode/config.json？(y/n): " if_generate
+        read -rp "Phát hiện đây là lần đầu tiên bạn cài đặt zicnode, bạn có muốn tự động tạo tệp cấu hình /etc/zicnode/config.json không? (y/n): " if_generate
         if [[ "$if_generate" =~ ^[Yy]$ ]]; then
-            # 交互式收集参数，提供示例默认值
-            read -rp "面板API地址[格式: https://example.com/]: " api_host
+            # Thu thập các tham số tương tác, cung cấp giá trị mặc định làm ví dụ
+            read -rp "Địa chỉ API của Panel [Định dạng: https://example.com/]: " api_host
             api_host=${api_host:-https://example.com/}
-            read -rp "节点ID: " node_id
+            read -rp "ID của Node: " node_id
             node_id=${node_id:-1}
-            read -rp "节点通讯密钥: " api_key
+            read -rp "Mã bảo mật kết nối Node (Server Token): " api_key
 
-            # 生成配置文件（覆盖可能从包中复制的模板）
+            # Tạo cấu hình (ghi đè lên mẫu có thể đã được sao chép từ gói)
             generate_zicnode_config "$api_host" "$node_id" "$api_key"
         else
-            echo "${green}已跳过自动生成配置。如需后续生成，可执行: zicnode generate${plain}"
+            echo "${green}Đã bỏ qua tự động tạo cấu hình. Để tạo sau này, bạn có thể chạy: zicnode generate${plain}"
         fi
     fi
 }
 
 parse_args "$@"
-echo -e "${green}开始安装${plain}"
+echo -e "${green}Bắt đầu cài đặt...${plain}"
 install_base
 install_zicnode "$VERSION_ARG"
