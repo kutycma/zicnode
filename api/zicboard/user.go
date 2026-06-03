@@ -88,6 +88,9 @@ func (c *Client) GetUserList(ctx context.Context) ([]UserInfo, error) {
 			userlist.Users = append(userlist.Users, u)
 		}
 	}
+	if userlist.Users == nil {
+		userlist.Users = []UserInfo{}
+	}
 	c.userEtag = r.Header().Get("ETag")
 	return userlist.Users, nil
 }

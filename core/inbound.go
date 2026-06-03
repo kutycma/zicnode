@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -22,6 +23,40 @@ import (
 
 type NetworkSettingsProxyProtocol struct {
 	AcceptProxyProtocol bool `json:"acceptProxyProtocol"`
+}
+
+func effectiveTransportNetwork(network string) string {
+	switch strings.ToLower(network) {
+	case "":
+		return "tcp"
+	case "http":
+		return "httpupgrade"
+	default:
+		return strings.ToLower(network)
+	}
+}
+
+func unmarshalNetworkSettings(raw json.RawMessage, target any, label string, nodeInfo *panel.NodeInfo) error {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 ||
+		bytes.Equal(raw, []byte("null")) {
+		return nil
+	}
+	if bytes.Equal(raw, []byte("[]")) {
+		raw = []byte("{}")
+	}
+
+	if raw[0] == '[' {
+		return fmt.Errorf(
+			"%s settings must be JSON object for node_id=%d protocol=%s network=%s, got array",
+			label,
+			nodeInfo.Id,
+			nodeInfo.Common.Protocol,
+			nodeInfo.Common.Network,
+		)
+	}
+
+	return json.Unmarshal(raw, target)
 }
 
 func (v *V2Core) removeInbound(tag string) error {
@@ -75,13 +110,13 @@ func buildInbound(nodeInfo *panel.NodeInfo, tag string) (*core.InboundHandlerCon
 	// Set network protocol
 	if len(nodeInfo.Common.NetworkSettings) > 0 {
 		n := &NetworkSettingsProxyProtocol{}
-		err := json.Unmarshal(nodeInfo.Common.NetworkSettings, n)
+		err := unmarshalNetworkSettings(nodeInfo.Common.NetworkSettings, n, "network", nodeInfo)
 		if err != nil {
 			return nil, fmt.Errorf("unmarshal network settings error: %s", err)
 		}
 		if n.AcceptProxyProtocol {
 			if in.StreamSetting == nil {
-				t := coreConf.TransportProtocol(nodeInfo.Common.Network)
+				t := coreConf.TransportProtocol(effectiveTransportNetwork(nodeInfo.Common.Network))
 				in.StreamSetting = &coreConf.StreamConfig{
 					Network: &t,
 					SocketSettings: &coreConf.SocketConfig{
@@ -211,31 +246,32 @@ func buildVLess(nodeInfo *panel.NodeInfo, inbound *coreConf.InboundDetourConfig)
 	if len(v.NetworkSettings) == 0 {
 		return nil
 	}
-	t := coreConf.TransportProtocol(v.Network)
+	network := effectiveTransportNetwork(v.Network)
+	t := coreConf.TransportProtocol(network)
 	inbound.StreamSetting = &coreConf.StreamConfig{Network: &t}
-	switch v.Network {
+	switch network {
 	case "tcp":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.TCPSettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.TCPSettings, "tcp", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal tcp settings error: %s", err)
 		}
 	case "ws":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.WSSettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.WSSettings, "ws", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal ws settings error: %s", err)
 		}
 	case "grpc":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.GRPCSettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.GRPCSettings, "grpc", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal grpc settings error: %s", err)
 		}
 	case "httpupgrade":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.HTTPUPGRADESettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.HTTPUPGRADESettings, "httpupgrade", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal httpupgrade settings error: %s", err)
 		}
 	case "splithttp", "xhttp":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.SplitHTTPSettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.SplitHTTPSettings, "xhttp", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal xhttp settings error: %s", err)
 		}
@@ -258,31 +294,32 @@ func buildVMess(nodeInfo *panel.NodeInfo, inbound *coreConf.InboundDetourConfig)
 	if len(v.NetworkSettings) == 0 {
 		return nil
 	}
-	t := coreConf.TransportProtocol(v.Network)
+	network := effectiveTransportNetwork(v.Network)
+	t := coreConf.TransportProtocol(network)
 	inbound.StreamSetting = &coreConf.StreamConfig{Network: &t}
-	switch v.Network {
+	switch network {
 	case "tcp":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.TCPSettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.TCPSettings, "tcp", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal tcp settings error: %s", err)
 		}
 	case "ws":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.WSSettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.WSSettings, "ws", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal ws settings error: %s", err)
 		}
 	case "grpc":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.GRPCSettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.GRPCSettings, "grpc", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal grpc settings error: %s", err)
 		}
 	case "httpupgrade":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.HTTPUPGRADESettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.HTTPUPGRADESettings, "httpupgrade", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal httpupgrade settings error: %s", err)
 		}
 	case "splithttp", "xhttp":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.SplitHTTPSettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.SplitHTTPSettings, "xhttp", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal xhttp settings error: %s", err)
 		}
@@ -304,6 +341,7 @@ func buildTrojan(nodeInfo *panel.NodeInfo, inbound *coreConf.InboundDetourConfig
 	if network == "" {
 		network = "tcp"
 	}
+	network = effectiveTransportNetwork(network)
 	t := coreConf.TransportProtocol(network)
 	inbound.StreamSetting = &coreConf.StreamConfig{Network: &t}
 	if len(v.NetworkSettings) == 0 {
@@ -311,19 +349,29 @@ func buildTrojan(nodeInfo *panel.NodeInfo, inbound *coreConf.InboundDetourConfig
 	}
 	switch network {
 	case "tcp":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.TCPSettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.TCPSettings, "tcp", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal tcp settings error: %s", err)
 		}
 	case "ws":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.WSSettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.WSSettings, "ws", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal ws settings error: %s", err)
 		}
 	case "grpc":
-		err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.GRPCSettings)
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.GRPCSettings, "grpc", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal grpc settings error: %s", err)
+		}
+	case "httpupgrade":
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.HTTPUPGRADESettings, "httpupgrade", nodeInfo)
+		if err != nil {
+			return fmt.Errorf("unmarshal httpupgrade settings error: %s", err)
+		}
+	case "splithttp", "xhttp":
+		err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.SplitHTTPSettings, "xhttp", nodeInfo)
+		if err != nil {
+			return fmt.Errorf("unmarshal xhttp settings error: %s", err)
 		}
 	default:
 		return errors.New("the network type is not vail")
@@ -365,7 +413,7 @@ func buildShadowsocks(nodeInfo *panel.NodeInfo, inbound *coreConf.InboundDetourC
 	// Only set StreamSetting when NetworkSettings is configured
 	if len(s.NetworkSettings) != 0 {
 		shttp := &ShadowsocksHTTPNetworkSettings{}
-		err := json.Unmarshal(s.NetworkSettings, shttp)
+		err := unmarshalNetworkSettings(s.NetworkSettings, shttp, "shadowsocks", nodeInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal shadowsocks settings error: %s", err)
 		}
@@ -479,32 +527,33 @@ func buildAnyTLS(nodeInfo *panel.NodeInfo, inbound *coreConf.InboundDetourConfig
 	settings := &coreConf.AnyTLSServerConfig{
 		PaddingScheme: v.PaddingScheme,
 	}
-	t := coreConf.TransportProtocol(v.Network)
+	network := effectiveTransportNetwork(v.Network)
+	t := coreConf.TransportProtocol(network)
 	inbound.StreamSetting = &coreConf.StreamConfig{Network: &t}
 	if len(v.NetworkSettings) != 0 {
-		switch v.Network {
+		switch network {
 		case "tcp":
-			err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.TCPSettings)
+			err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.TCPSettings, "tcp", nodeInfo)
 			if err != nil {
 				return fmt.Errorf("unmarshal tcp settings error: %s", err)
 			}
 		case "ws":
-			err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.WSSettings)
+			err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.WSSettings, "ws", nodeInfo)
 			if err != nil {
 				return fmt.Errorf("unmarshal ws settings error: %s", err)
 			}
 		case "grpc":
-			err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.GRPCSettings)
+			err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.GRPCSettings, "grpc", nodeInfo)
 			if err != nil {
 				return fmt.Errorf("unmarshal grpc settings error: %s", err)
 			}
 		case "httpupgrade":
-			err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.HTTPUPGRADESettings)
+			err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.HTTPUPGRADESettings, "httpupgrade", nodeInfo)
 			if err != nil {
 				return fmt.Errorf("unmarshal httpupgrade settings error: %s", err)
 			}
 		case "splithttp", "xhttp":
-			err := json.Unmarshal(v.NetworkSettings, &inbound.StreamSetting.SplitHTTPSettings)
+			err := unmarshalNetworkSettings(v.NetworkSettings, &inbound.StreamSetting.SplitHTTPSettings, "xhttp", nodeInfo)
 			if err != nil {
 				return fmt.Errorf("unmarshal xhttp settings error: %s", err)
 			}

@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	panel "github.com/ZicBoard/ZicNode/api/zicboard"
@@ -57,7 +56,7 @@ func (c *Controller) Start(x *core.V2Core) error {
 		return fmt.Errorf("get user list error: %s", err)
 	}
 	if len(c.userList) == 0 {
-		return errors.New("add users error: not have any user")
+		log.WithField("tag", node.Tag).Warn("Started with empty user list; waiting for user sync")
 	}
 	c.aliveMap, err = c.apiClient.GetUserAlive(context.Background())
 	if err != nil {
