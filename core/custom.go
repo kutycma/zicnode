@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	panel "github.com/ZicBoard/ZicNode/api/zicboard"
+	log "github.com/sirupsen/logrus"
 	"github.com/xtls/xray-core/app/dns"
 	"github.com/xtls/xray-core/app/router"
 	xnet "github.com/xtls/xray-core/common/net"
@@ -40,6 +41,72 @@ func hasOutboundWithTag(list []*core.OutboundHandlerConfig, tag string) bool {
 		}
 	}
 	return false
+}
+
+func parseCustomRouteOutbound(actionValue *string) (*coreConf.OutboundDetourConfig, bool, bool, error) {
+	cleaned, removedAllowInsecure, hasPinnedPeerCertSha256, err := sanitizeCustomRouteOutbound(actionValue)
+	if err != nil {
+		return nil, false, false, err
+	}
+	outbound := &coreConf.OutboundDetourConfig{}
+	if err := json.Unmarshal(cleaned, outbound); err != nil {
+		return nil, false, false, err
+	}
+	return outbound, removedAllowInsecure, hasPinnedPeerCertSha256, nil
+}
+
+func sanitizeCustomRouteOutbound(actionValue *string) ([]byte, bool, bool, error) {
+	if actionValue == nil {
+		return nil, false, false, nil
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(*actionValue), &raw); err != nil {
+		return nil, false, false, err
+	}
+
+	streamSettings, ok := raw["streamSettings"].(map[string]interface{})
+	if !ok {
+		return []byte(*actionValue), false, false, nil
+	}
+
+	removedAllowInsecure := false
+	hasPinnedPeerCertSha256 := false
+	for key, value := range streamSettings {
+		if !strings.HasSuffix(key, "Settings") {
+			continue
+		}
+		settings, ok := value.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if pinned, ok := settings["pinnedPeerCertSha256"].(string); ok && strings.TrimSpace(pinned) != "" {
+			hasPinnedPeerCertSha256 = true
+		}
+		if _, ok := settings["allowInsecure"]; ok {
+			delete(settings, "allowInsecure")
+			removedAllowInsecure = true
+		}
+	}
+
+	if !removedAllowInsecure {
+		return []byte(*actionValue), false, hasPinnedPeerCertSha256, nil
+	}
+
+	cleaned, err := json.Marshal(raw)
+	if err != nil {
+		return nil, false, false, err
+	}
+	return cleaned, true, hasPinnedPeerCertSha256, nil
+}
+
+func logRemovedCustomOutboundAllowInsecure(info *panel.NodeInfo, route panel.Route, outbound *coreConf.OutboundDetourConfig, hasPinnedPeerCertSha256 bool) {
+	log.WithFields(log.Fields{
+		"inbound_tag":             info.Tag,
+		"route_action":            route.Action,
+		"outbound_tag":            outbound.Tag,
+		"pinned_peer_cert_sha256": hasPinnedPeerCertSha256,
+	}).Warn("removed deprecated allowInsecure from custom route outbound TLS settings")
 }
 
 func GetCustomConfig(infos []*panel.NodeInfo) (*dns.Config, []*core.OutboundHandlerConfig, *router.Config, error) {
@@ -146,8 +213,7 @@ func GetCustomConfig(infos []*panel.NodeInfo) (*dns.Config, []*core.OutboundHand
 				if route.ActionValue == nil {
 					continue
 				}
-				outbound := &coreConf.OutboundDetourConfig{}
-				err := json.Unmarshal([]byte(*route.ActionValue), outbound)
+				outbound, removedAllowInsecure, hasPinnedPeerCertSha256, err := parseCustomRouteOutbound(route.ActionValue)
 				if err != nil {
 					continue
 				}
@@ -164,6 +230,9 @@ func GetCustomConfig(infos []*panel.NodeInfo) (*dns.Config, []*core.OutboundHand
 				if hasOutboundWithTag(coreOutboundConfig, outbound.Tag) {
 					continue
 				}
+				if removedAllowInsecure {
+					logRemovedCustomOutboundAllowInsecure(info, route, outbound, hasPinnedPeerCertSha256)
+				}
 				custom_outbound, err := outbound.Build()
 				if err != nil {
 					continue
@@ -173,8 +242,7 @@ func GetCustomConfig(infos []*panel.NodeInfo) (*dns.Config, []*core.OutboundHand
 				if route.ActionValue == nil {
 					continue
 				}
-				outbound := &coreConf.OutboundDetourConfig{}
-				err := json.Unmarshal([]byte(*route.ActionValue), outbound)
+				outbound, removedAllowInsecure, hasPinnedPeerCertSha256, err := parseCustomRouteOutbound(route.ActionValue)
 				if err != nil {
 					continue
 				}
@@ -191,6 +259,9 @@ func GetCustomConfig(infos []*panel.NodeInfo) (*dns.Config, []*core.OutboundHand
 				if hasOutboundWithTag(coreOutboundConfig, outbound.Tag) {
 					continue
 				}
+				if removedAllowInsecure {
+					logRemovedCustomOutboundAllowInsecure(info, route, outbound, hasPinnedPeerCertSha256)
+				}
 				custom_outbound, err := outbound.Build()
 				if err != nil {
 					continue
@@ -200,8 +271,7 @@ func GetCustomConfig(infos []*panel.NodeInfo) (*dns.Config, []*core.OutboundHand
 				if route.ActionValue == nil {
 					continue
 				}
-				outbound := &coreConf.OutboundDetourConfig{}
-				err := json.Unmarshal([]byte(*route.ActionValue), outbound)
+				outbound, removedAllowInsecure, hasPinnedPeerCertSha256, err := parseCustomRouteOutbound(route.ActionValue)
 				if err != nil {
 					continue
 				}
@@ -217,6 +287,9 @@ func GetCustomConfig(infos []*panel.NodeInfo) (*dns.Config, []*core.OutboundHand
 				coreRouterConfig.RuleList = append(coreRouterConfig.RuleList, rawRule)
 				if hasOutboundWithTag(coreOutboundConfig, outbound.Tag) {
 					continue
+				}
+				if removedAllowInsecure {
+					logRemovedCustomOutboundAllowInsecure(info, route, outbound, hasPinnedPeerCertSha256)
 				}
 				custom_outbound, err := outbound.Build()
 				if err != nil {
