@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"net"
 	"os"
 	"path"
 	"strings"
@@ -68,7 +69,7 @@ func checkPath(p string) error {
 
 func (l *Lego) SetProvider() error {
 	switch l.config.CertMode {
-	case "http":
+	case "auto", "http":
 		err := l.client.Challenge.SetHTTP01Provider(http01.NewProviderServer("", "80"))
 		if err != nil {
 			return err
@@ -94,6 +95,9 @@ func (l *Lego) CreateCert() (err error) {
 		Domains: []string{l.config.CertDomain},
 		Bundle:  true,
 	}
+	if net.ParseIP(l.config.CertDomain) != nil {
+		request.Profile = "shortlived"
+	}
 	certificates, err := l.client.Certificate.Obtain(request)
 	if err != nil {
 		return fmt.Errorf("obtain certificate error: %s", err)
@@ -106,6 +110,9 @@ func (l *Lego) CreateCert() (err error) {
 }
 
 func (l *Lego) RenewCert() error {
+	if net.ParseIP(l.config.CertDomain) != nil {
+		return l.CreateCert()
+	}
 	file, err := os.ReadFile(l.config.CertFile)
 	if err != nil {
 		return fmt.Errorf("read cert file error: %s", err)
@@ -135,6 +142,9 @@ func (l *Lego) CheckCert(file []byte) (bool, error) {
 		return false, err
 	}
 	notAfter := int(time.Until(cert.NotAfter).Hours() / 24.0)
+	if net.ParseIP(l.config.CertDomain) != nil {
+		return time.Until(cert.NotAfter) <= ipRenewBefore, nil
+	}
 	if notAfter > 30 {
 		return false, nil
 	}

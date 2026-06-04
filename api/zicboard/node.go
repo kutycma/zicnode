@@ -33,6 +33,7 @@ type NodeInfo struct {
 
 type CommonNode struct {
 	Protocol   string      `json:"protocol"`
+	Host       string      `json:"host"`
 	ListenIP   string      `json:"listen_ip"`
 	ServerPort int         `json:"server_port"`
 	Routes     []Route     `json:"routes"`
@@ -179,20 +180,28 @@ func (c *Client) GetNodeInfo(ctx context.Context) (node *NodeInfo, err error) {
 		return nil, fmt.Errorf("unsupport protocol: %s", cm.Protocol)
 	}
 	node.Tag = fmt.Sprintf("[%s]-%s:%d", c.APIHost, node.Type, node.Id)
+	certMode := strings.TrimSpace(cm.TlsSettings.CertMode)
+	if cm.Tls == Tls && (certMode == "" || strings.EqualFold(certMode, "none")) {
+		certMode = "auto"
+	}
+	certDomain := strings.TrimSpace(cm.TlsSettings.PrimaryServerName())
+	if certDomain == "" {
+		certDomain = strings.TrimSpace(cm.Host)
+	}
 	cf := cm.TlsSettings.CertFile
 	kf := cm.TlsSettings.KeyFile
 	if cf == "" {
-		cf = filepath.Join("/etc/zicnode/", cm.Protocol+strconv.Itoa(c.NodeId)+".cer")
+		cf = filepath.Join("/etc/zicnode/", "node-"+strconv.Itoa(c.NodeId)+".cer")
 	}
 	if kf == "" {
-		kf = filepath.Join("/etc/zicnode/", cm.Protocol+strconv.Itoa(c.NodeId)+".key")
+		kf = filepath.Join("/etc/zicnode/", "node-"+strconv.Itoa(c.NodeId)+".key")
 	}
 	cm.CertInfo = &CertInfo{
-		CertMode:         cm.TlsSettings.CertMode,
+		CertMode:         certMode,
 		CertFile:         cf,
 		KeyFile:          kf,
 		Email:            "node@zicboard.local",
-		CertDomain:       cm.TlsSettings.PrimaryServerName(),
+		CertDomain:       certDomain,
 		DNSEnv:           make(map[string]string),
 		Provider:         cm.TlsSettings.Provider,
 		RejectUnknownSni: cm.TlsSettings.RejectUnknownSni == "1",
