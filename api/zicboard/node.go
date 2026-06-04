@@ -1,17 +1,16 @@
 package panel
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
-
-	"encoding/json"
 )
 
 // Security type
@@ -89,7 +88,7 @@ type TlsSettings struct {
 	ShortIds         []string `json:"short_ids"`
 	PrivateKey       string   `json:"private_key"`
 	Mldsa65Seed      string   `json:"mldsa65Seed"`
-	Xver             uint64   `json:"xver,string"`
+	Xver             uint64   `json:"xver"`
 	CertMode         string   `json:"cert_mode"`
 	CertFile         string   `json:"cert_file"`
 	KeyFile          string   `json:"key_file"`
@@ -114,6 +113,517 @@ type EncSettings struct {
 	Ticket        string `json:"ticket"`
 	ServerPadding string `json:"server_padding"`
 	PrivateKey    string `json:"private_key"`
+}
+
+func (c *CommonNode) UnmarshalJSON(data []byte) error {
+	if jsonRawIsEmpty(data) {
+		*c = CommonNode{}
+		return nil
+	}
+
+	var raw struct {
+		Protocol              json.RawMessage `json:"protocol"`
+		Host                  json.RawMessage `json:"host"`
+		ListenIP              json.RawMessage `json:"listen_ip"`
+		ServerPort            json.RawMessage `json:"server_port"`
+		Routes                []Route         `json:"routes"`
+		BaseConfig            *BaseConfig     `json:"base_config"`
+		Tls                   json.RawMessage `json:"tls"`
+		TlsSettings           json.RawMessage `json:"tls_settings"`
+		Network               json.RawMessage `json:"network"`
+		NetworkSettings       json.RawMessage `json:"network_settings"`
+		Encryption            json.RawMessage `json:"encryption"`
+		EncryptionSettings    json.RawMessage `json:"encryption_settings"`
+		ServerName            json.RawMessage `json:"server_name"`
+		Flow                  json.RawMessage `json:"flow"`
+		Cipher                json.RawMessage `json:"cipher"`
+		ServerKey             json.RawMessage `json:"server_key"`
+		CongestionControl     json.RawMessage `json:"congestion_control"`
+		ZeroRTTHandshake      json.RawMessage `json:"zero_rtt_handshake"`
+		PaddingScheme         json.RawMessage `json:"padding_scheme"`
+		UpMbps                json.RawMessage `json:"up_mbps"`
+		DownMbps              json.RawMessage `json:"down_mbps"`
+		Obfs                  json.RawMessage `json:"obfs"`
+		ObfsPassword          json.RawMessage `json:"obfs_password"`
+		IgnoreClientBandwidth json.RawMessage `json:"ignore_client_bandwidth"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	var tlsSettings TlsSettings
+	if err := unmarshalFlexibleObject(raw.TlsSettings, &tlsSettings); err != nil {
+		return fmt.Errorf("decode tls_settings error: %s", err)
+	}
+	var encryptionSettings EncSettings
+	if err := unmarshalFlexibleObject(raw.EncryptionSettings, &encryptionSettings); err != nil {
+		return fmt.Errorf("decode encryption_settings error: %s", err)
+	}
+
+	*c = CommonNode{
+		Protocol:                flexibleString(raw.Protocol),
+		Host:                    flexibleString(raw.Host),
+		ListenIP:                flexibleString(raw.ListenIP),
+		ServerPort:              flexibleInt(raw.ServerPort),
+		Routes:                  raw.Routes,
+		BaseConfig:              raw.BaseConfig,
+		Tls:                     flexibleInt(raw.Tls),
+		TlsSettings:             tlsSettings,
+		Network:                 flexibleString(raw.Network),
+		NetworkSettings:         jsonRawOrNil(raw.NetworkSettings),
+		Encryption:              flexibleString(raw.Encryption),
+		EncryptionSettings:      encryptionSettings,
+		ServerName:              flexibleString(raw.ServerName),
+		Flow:                    flexibleString(raw.Flow),
+		Cipher:                  flexibleString(raw.Cipher),
+		ServerKey:               flexibleString(raw.ServerKey),
+		CongestionControl:       flexibleString(raw.CongestionControl),
+		ZeroRTTHandshake:        flexibleBool(raw.ZeroRTTHandshake),
+		PaddingScheme:           flexibleStringSlice(raw.PaddingScheme),
+		UpMbps:                  flexibleInt(raw.UpMbps),
+		DownMbps:                flexibleInt(raw.DownMbps),
+		Obfs:                    flexibleString(raw.Obfs),
+		ObfsPassword:            flexibleString(raw.ObfsPassword),
+		Ignore_Client_Bandwidth: flexibleBool(raw.IgnoreClientBandwidth),
+	}
+	return nil
+}
+
+func (r *Route) UnmarshalJSON(data []byte) error {
+	if jsonRawIsEmpty(data) {
+		*r = Route{}
+		return nil
+	}
+
+	var raw struct {
+		Id          json.RawMessage `json:"id"`
+		Match       json.RawMessage `json:"match"`
+		Action      json.RawMessage `json:"action"`
+		ActionValue json.RawMessage `json:"action_value"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	r.Id = flexibleInt(raw.Id)
+	r.Match = flexibleStringSlice(raw.Match)
+	r.Action = flexibleString(raw.Action)
+	if jsonRawIsEmpty(raw.ActionValue) {
+		r.ActionValue = nil
+	} else {
+		value := flexibleString(raw.ActionValue)
+		r.ActionValue = &value
+	}
+	return nil
+}
+
+func (b *BaseConfig) UnmarshalJSON(data []byte) error {
+	if jsonRawIsEmpty(data) {
+		*b = BaseConfig{}
+		return nil
+	}
+
+	var raw struct {
+		Panel                  json.RawMessage `json:"panel"`
+		NodeType               json.RawMessage `json:"node_type"`
+		PushInterval           any             `json:"push_interval"`
+		PullInterval           any             `json:"pull_interval"`
+		DeviceOnlineMinTraffic json.RawMessage `json:"device_online_min_traffic"`
+		NodeReportMinTraffic   json.RawMessage `json:"node_report_min_traffic"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*b = BaseConfig{
+		Panel:                  flexibleString(raw.Panel),
+		NodeType:               flexibleString(raw.NodeType),
+		PushInterval:           raw.PushInterval,
+		PullInterval:           raw.PullInterval,
+		DeviceOnlineMinTraffic: flexibleInt(raw.DeviceOnlineMinTraffic),
+		NodeReportMinTraffic:   flexibleInt(raw.NodeReportMinTraffic),
+	}
+	return nil
+}
+
+func (t *TlsSettings) UnmarshalJSON(data []byte) error {
+	if jsonRawIsEmpty(data) {
+		*t = TlsSettings{}
+		return nil
+	}
+
+	var raw struct {
+		ServerName       json.RawMessage `json:"server_name"`
+		ServerNames      json.RawMessage `json:"server_names"`
+		Dest             json.RawMessage `json:"dest"`
+		ServerPort       json.RawMessage `json:"server_port"`
+		ShortId          json.RawMessage `json:"short_id"`
+		ShortIds         json.RawMessage `json:"short_ids"`
+		PrivateKey       json.RawMessage `json:"private_key"`
+		Mldsa65Seed      json.RawMessage `json:"mldsa65Seed"`
+		Xver             json.RawMessage `json:"xver"`
+		CertMode         json.RawMessage `json:"cert_mode"`
+		CertFile         json.RawMessage `json:"cert_file"`
+		KeyFile          json.RawMessage `json:"key_file"`
+		Provider         json.RawMessage `json:"provider"`
+		DNSEnv           json.RawMessage `json:"dns_env"`
+		RejectUnknownSni json.RawMessage `json:"reject_unknown_sni"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*t = TlsSettings{
+		ServerName:       flexibleString(raw.ServerName),
+		ServerNames:      flexibleStringSlice(raw.ServerNames),
+		Dest:             flexibleString(raw.Dest),
+		ServerPort:       flexibleString(raw.ServerPort),
+		ShortId:          flexibleString(raw.ShortId),
+		ShortIds:         flexibleStringSlice(raw.ShortIds),
+		PrivateKey:       flexibleString(raw.PrivateKey),
+		Mldsa65Seed:      flexibleString(raw.Mldsa65Seed),
+		Xver:             flexibleUint64(raw.Xver),
+		CertMode:         flexibleString(raw.CertMode),
+		CertFile:         flexibleString(raw.CertFile),
+		KeyFile:          flexibleString(raw.KeyFile),
+		Provider:         flexibleString(raw.Provider),
+		DNSEnv:           flexibleString(raw.DNSEnv),
+		RejectUnknownSni: flexibleBoolString(raw.RejectUnknownSni),
+	}
+	return nil
+}
+
+func (e *EncSettings) UnmarshalJSON(data []byte) error {
+	if jsonRawIsEmpty(data) {
+		*e = EncSettings{}
+		return nil
+	}
+
+	var raw struct {
+		Mode          json.RawMessage `json:"mode"`
+		Ticket        json.RawMessage `json:"ticket"`
+		ServerPadding json.RawMessage `json:"server_padding"`
+		PrivateKey    json.RawMessage `json:"private_key"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*e = EncSettings{
+		Mode:          flexibleString(raw.Mode),
+		Ticket:        flexibleString(raw.Ticket),
+		ServerPadding: flexibleString(raw.ServerPadding),
+		PrivateKey:    flexibleString(raw.PrivateKey),
+	}
+	return nil
+}
+
+func unmarshalFlexibleObject(raw json.RawMessage, target any) error {
+	if jsonRawIsEmpty(raw) {
+		return nil
+	}
+	trimmed := bytes.TrimSpace(raw)
+	if bytes.Equal(trimmed, []byte("[]")) {
+		return nil
+	}
+	if len(trimmed) > 0 && trimmed[0] == '"' {
+		var encoded string
+		if err := json.Unmarshal(trimmed, &encoded); err != nil {
+			return err
+		}
+		encoded = strings.TrimSpace(encoded)
+		if encoded == "" {
+			return nil
+		}
+		trimmed = []byte(encoded)
+	}
+	return json.Unmarshal(trimmed, target)
+}
+
+func jsonRawIsEmpty(raw []byte) bool {
+	trimmed := bytes.TrimSpace(raw)
+	return len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null"))
+}
+
+func jsonRawOrNil(raw json.RawMessage) json.RawMessage {
+	if jsonRawIsEmpty(raw) {
+		return nil
+	}
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) > 0 && trimmed[0] == '"' {
+		var encoded string
+		if err := json.Unmarshal(trimmed, &encoded); err == nil {
+			encoded = strings.TrimSpace(encoded)
+			if encoded == "" || strings.EqualFold(encoded, "null") {
+				return nil
+			}
+			trimmed = []byte(encoded)
+		}
+	}
+	return append(json.RawMessage(nil), trimmed...)
+}
+
+func flexibleString(raw []byte) string {
+	if jsonRawIsEmpty(raw) {
+		return ""
+	}
+	trimmed := bytes.TrimSpace(raw)
+
+	var value string
+	if err := json.Unmarshal(trimmed, &value); err == nil {
+		return value
+	}
+
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, trimmed); err == nil {
+		return compact.String()
+	}
+	return string(trimmed)
+}
+
+func flexibleStringSlice(raw []byte) []string {
+	if jsonRawIsEmpty(raw) {
+		return nil
+	}
+	trimmed := bytes.TrimSpace(raw)
+
+	var items []json.RawMessage
+	if err := json.Unmarshal(trimmed, &items); err == nil {
+		return rawMessagesToStrings(items)
+	}
+
+	var value string
+	if err := json.Unmarshal(trimmed, &value); err == nil {
+		return stringToStringSlice(value)
+	}
+
+	value = flexibleString(trimmed)
+	if value == "" {
+		return nil
+	}
+	return []string{value}
+}
+
+func stringToStringSlice(value string) []string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || strings.EqualFold(trimmed, "null") {
+		return nil
+	}
+	if strings.HasPrefix(trimmed, "[") {
+		var items []json.RawMessage
+		if err := json.Unmarshal([]byte(trimmed), &items); err == nil {
+			return rawMessagesToStrings(items)
+		}
+	}
+	return []string{trimmed}
+}
+
+func rawMessagesToStrings(items []json.RawMessage) []string {
+	values := make([]string, 0, len(items))
+	for _, item := range items {
+		value := flexibleString(item)
+		if value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+func flexibleInt(raw []byte) int {
+	if jsonRawIsEmpty(raw) {
+		return 0
+	}
+	trimmed := bytes.TrimSpace(raw)
+
+	var value int
+	if err := json.Unmarshal(trimmed, &value); err == nil {
+		return value
+	}
+
+	var text string
+	if err := json.Unmarshal(trimmed, &text); err == nil {
+		return parseIntString(text)
+	}
+
+	var boolean bool
+	if err := json.Unmarshal(trimmed, &boolean); err == nil {
+		if boolean {
+			return 1
+		}
+		return 0
+	}
+
+	var number float64
+	if err := json.Unmarshal(trimmed, &number); err == nil {
+		return int(number)
+	}
+	return 0
+}
+
+func flexibleUint64(raw []byte) uint64 {
+	if jsonRawIsEmpty(raw) {
+		return 0
+	}
+	trimmed := bytes.TrimSpace(raw)
+
+	var value uint64
+	if err := json.Unmarshal(trimmed, &value); err == nil {
+		return value
+	}
+
+	var text string
+	if err := json.Unmarshal(trimmed, &text); err == nil {
+		return parseUint64String(text)
+	}
+
+	var boolean bool
+	if err := json.Unmarshal(trimmed, &boolean); err == nil {
+		if boolean {
+			return 1
+		}
+		return 0
+	}
+
+	var number float64
+	if err := json.Unmarshal(trimmed, &number); err == nil && number > 0 {
+		return uint64(number)
+	}
+	return 0
+}
+
+func flexibleBool(raw []byte) bool {
+	if jsonRawIsEmpty(raw) {
+		return false
+	}
+	trimmed := bytes.TrimSpace(raw)
+
+	var value bool
+	if err := json.Unmarshal(trimmed, &value); err == nil {
+		return value
+	}
+
+	var text string
+	if err := json.Unmarshal(trimmed, &text); err == nil {
+		return parseBoolString(text)
+	}
+
+	var number float64
+	if err := json.Unmarshal(trimmed, &number); err == nil {
+		return number != 0
+	}
+	return false
+}
+
+func flexibleBoolString(raw []byte) string {
+	if jsonRawIsEmpty(raw) {
+		return ""
+	}
+	value := strings.TrimSpace(flexibleString(raw))
+	switch strings.ToLower(value) {
+	case "1", "true", "yes", "y", "on":
+		return "1"
+	case "0", "false", "no", "n", "off":
+		return "0"
+	case "":
+		return ""
+	}
+
+	if number, err := strconv.ParseFloat(value, 64); err == nil {
+		if number != 0 {
+			return "1"
+		}
+		return "0"
+	}
+	return value
+}
+
+func parseBoolString(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func parseIntString(value string) int {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0
+	}
+	if intValue, err := strconv.Atoi(trimmed); err == nil {
+		return intValue
+	}
+	if floatValue, err := strconv.ParseFloat(trimmed, 64); err == nil {
+		return int(floatValue)
+	}
+	if parseBoolString(trimmed) {
+		return 1
+	}
+	return 0
+}
+
+func parseUint64String(value string) uint64 {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0
+	}
+	if uintValue, err := strconv.ParseUint(trimmed, 10, 64); err == nil {
+		return uintValue
+	}
+	if floatValue, err := strconv.ParseFloat(trimmed, 64); err == nil && floatValue > 0 {
+		return uint64(floatValue)
+	}
+	if parseBoolString(trimmed) {
+		return 1
+	}
+	return 0
+}
+
+func flexibleIntFromAny(value any) int {
+	switch typed := value.(type) {
+	case nil:
+		return 0
+	case int:
+		return typed
+	case int8:
+		return int(typed)
+	case int16:
+		return int(typed)
+	case int32:
+		return int(typed)
+	case int64:
+		return int(typed)
+	case uint:
+		return int(typed)
+	case uint8:
+		return int(typed)
+	case uint16:
+		return int(typed)
+	case uint32:
+		return int(typed)
+	case uint64:
+		return int(typed)
+	case float32:
+		return int(typed)
+	case float64:
+		return int(typed)
+	case string:
+		return parseIntString(typed)
+	case bool:
+		if typed {
+			return 1
+		}
+		return 0
+	case json.Number:
+		return parseIntString(typed.String())
+	default:
+		raw, err := json.Marshal(typed)
+		if err != nil {
+			return 0
+		}
+		return flexibleInt(raw)
+	}
 }
 
 func (c *Client) GetNodeInfo(ctx context.Context) (node *NodeInfo, err error) {
@@ -226,17 +736,7 @@ func (c *Client) GetNodeInfo(ctx context.Context) (node *NodeInfo, err error) {
 }
 
 func intervalToTime(i interface{}) time.Duration {
-	switch reflect.TypeOf(i).Kind() {
-	case reflect.Int:
-		return time.Duration(i.(int)) * time.Second
-	case reflect.String:
-		i, _ := strconv.Atoi(i.(string))
-		return time.Duration(i) * time.Second
-	case reflect.Float64:
-		return time.Duration(i.(float64)) * time.Second
-	default:
-		return time.Duration(reflect.ValueOf(i).Int()) * time.Second
-	}
+	return time.Duration(flexibleIntFromAny(i)) * time.Second
 }
 
 func (t TlsSettings) EffectiveServerNames() []string {
