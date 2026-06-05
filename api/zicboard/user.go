@@ -32,6 +32,16 @@ type AliveMap struct {
 	Alive map[int]int `json:"alive"`
 }
 
+type CertReport struct {
+	Status   string `json:"status"`
+	Target   string `json:"target"`
+	Mode     string `json:"mode"`
+	Source   string `json:"source"`
+	SHA256   string `json:"sha256"`
+	NotAfter int64  `json:"not_after"`
+	Error    string `json:"error,omitempty"`
+}
+
 // GetUserList pulls users from ZicBoard.
 func (c *Client) GetUserList(ctx context.Context) ([]UserInfo, error) {
 	const path = "/api/v3/server/UniProxy/user"
@@ -156,6 +166,21 @@ func (c *Client) ReportUserTraffic(ctx context.Context, userTraffic []UserTraffi
 
 func (c *Client) ReportNodeOnlineUsers(ctx context.Context, data *map[int][]string) error {
 	const path = "/api/v3/server/UniProxy/alive"
+	_, err := c.client.R().
+		SetContext(ctx).
+		SetBody(data).
+		ForceContentType("application/json").
+		Post(path)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) ReportCertStatus(ctx context.Context, data *CertReport) error {
+	const path = "/api/v3/server/UniProxy/cert/report"
 	_, err := c.client.R().
 		SetContext(ctx).
 		SetBody(data).

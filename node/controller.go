@@ -68,7 +68,7 @@ func (c *Controller) Start(x *core.V2Core) error {
 	l := limiter.AddLimiter(c.info.Type, c.tag, c.userList, c.aliveMap)
 	c.limiter = l
 	if node.Security == panel.Tls {
-		err = c.requestCert()
+		err = c.requestCertAndReport(false)
 		if err != nil {
 			return fmt.Errorf("request cert error: %s", err)
 		}

@@ -35,6 +35,7 @@ func TestCommonNodeFlexibleDecodeLegacyTypes(t *testing.T) {
 			"cert_mode": null,
 			"provider": false,
 			"dns_env": 123,
+			"self_fallback": "1",
 			"cert_file": null,
 			"key_file": true
 		},
@@ -105,6 +106,9 @@ func TestCommonNodeFlexibleDecodeLegacyTypes(t *testing.T) {
 	}
 	if settings.ServerPort != "443" || settings.Provider != "false" || settings.DNSEnv != "123" || settings.KeyFile != "true" {
 		t.Fatalf("tls string fields were not normalized: %#v", settings)
+	}
+	if !settings.SelfFallback {
+		t.Fatalf("self_fallback was not normalized: %#v", settings)
 	}
 	if node.EncryptionSettings.Mode != "1" || node.EncryptionSettings.ServerPadding != "false" || node.EncryptionSettings.PrivateKey != "true" {
 		t.Fatalf("encryption settings were not normalized: %#v", node.EncryptionSettings)

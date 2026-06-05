@@ -94,6 +94,7 @@ type TlsSettings struct {
 	KeyFile          string   `json:"key_file"`
 	Provider         string   `json:"provider"`
 	DNSEnv           string   `json:"dns_env"`
+	SelfFallback     bool     `json:"self_fallback"`
 	RejectUnknownSni string   `json:"reject_unknown_sni"`
 }
 
@@ -105,6 +106,7 @@ type CertInfo struct {
 	CertDomain       string
 	DNSEnv           map[string]string
 	Provider         string
+	SelfFallback     bool
 	RejectUnknownSni bool
 }
 
@@ -267,6 +269,7 @@ func (t *TlsSettings) UnmarshalJSON(data []byte) error {
 		KeyFile          json.RawMessage `json:"key_file"`
 		Provider         json.RawMessage `json:"provider"`
 		DNSEnv           json.RawMessage `json:"dns_env"`
+		SelfFallback     json.RawMessage `json:"self_fallback"`
 		RejectUnknownSni json.RawMessage `json:"reject_unknown_sni"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -288,6 +291,7 @@ func (t *TlsSettings) UnmarshalJSON(data []byte) error {
 		KeyFile:          flexibleString(raw.KeyFile),
 		Provider:         flexibleString(raw.Provider),
 		DNSEnv:           flexibleString(raw.DNSEnv),
+		SelfFallback:     flexibleBool(raw.SelfFallback),
 		RejectUnknownSni: flexibleBoolString(raw.RejectUnknownSni),
 	}
 	return nil
@@ -691,9 +695,6 @@ func (c *Client) GetNodeInfo(ctx context.Context) (node *NodeInfo, err error) {
 	}
 	node.Tag = fmt.Sprintf("[%s]-%s:%d", c.APIHost, node.Type, node.Id)
 	certMode := strings.TrimSpace(cm.TlsSettings.CertMode)
-	if cm.Tls == Tls && (certMode == "" || strings.EqualFold(certMode, "none")) {
-		certMode = "auto"
-	}
 	certDomain := strings.TrimSpace(cm.TlsSettings.PrimaryServerName())
 	if certDomain == "" {
 		certDomain = strings.TrimSpace(cm.Host)
@@ -714,14 +715,21 @@ func (c *Client) GetNodeInfo(ctx context.Context) (node *NodeInfo, err error) {
 		CertDomain:       certDomain,
 		DNSEnv:           make(map[string]string),
 		Provider:         cm.TlsSettings.Provider,
+		SelfFallback:     cm.TlsSettings.SelfFallback,
 		RejectUnknownSni: cm.TlsSettings.RejectUnknownSni == "1",
 	}
-	if cm.CertInfo.CertMode == "dns" && cm.TlsSettings.DNSEnv != "" {
-		envs := strings.Split(cm.TlsSettings.DNSEnv, ",")
+	if cm.TlsSettings.DNSEnv != "" {
+		envs := strings.FieldsFunc(cm.TlsSettings.DNSEnv, func(r rune) bool {
+			return r == ',' || r == '\n' || r == '\r'
+		})
 		for _, env := range envs {
 			kv := strings.SplitN(env, "=", 2)
 			if len(kv) == 2 {
-				cm.CertInfo.DNSEnv[kv[0]] = kv[1]
+				key := strings.TrimSpace(kv[0])
+				value := strings.TrimSpace(kv[1])
+				if key != "" {
+					cm.CertInfo.DNSEnv[key] = value
+				}
 			}
 		}
 	}
