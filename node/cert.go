@@ -7,6 +7,8 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -30,12 +32,14 @@ const (
 )
 
 type certMetadata struct {
-	Target    string `json:"target"`
-	Mode      string `json:"mode"`
-	Source    string `json:"source"`
-	SHA256    string `json:"sha256"`
-	NotAfter  int64  `json:"not_after"`
-	UpdatedAt int64  `json:"updated_at"`
+	Target          string `json:"target"`
+	Mode            string `json:"mode"`
+	Source          string `json:"source"`
+	SHA256          string `json:"sha256"`
+	SHA256Hex       string `json:"sha256_hex,omitempty"`
+	PublicKeySHA256 string `json:"public_key_sha256,omitempty"`
+	NotAfter        int64  `json:"not_after"`
+	UpdatedAt       int64  `json:"updated_at"`
 }
 
 func (c *Controller) renewCertTask(_ context.Context) error {
@@ -343,12 +347,14 @@ func metadataFromCertFile(cert *panel.CertInfo, source string) (*certMetadata, e
 
 func metadataFromCertificate(cert *panel.CertInfo, x509Cert *x509.Certificate, source string) *certMetadata {
 	return &certMetadata{
-		Target:    cert.CertDomain,
-		Mode:      cert.CertMode,
-		Source:    source,
-		SHA256:    certSHA256(x509Cert),
-		NotAfter:  x509Cert.NotAfter.Unix(),
-		UpdatedAt: time.Now().Unix(),
+		Target:          cert.CertDomain,
+		Mode:            cert.CertMode,
+		Source:          source,
+		SHA256:          certSHA256(x509Cert),
+		SHA256Hex:       certSHA256Hex(x509Cert),
+		PublicKeySHA256: certPublicKeySHA256(x509Cert),
+		NotAfter:        x509Cert.NotAfter.Unix(),
+		UpdatedAt:       time.Now().Unix(),
 	}
 }
 
@@ -371,6 +377,20 @@ func certSHA256(cert *x509.Certificate) string {
 		parts[i] = fmt.Sprintf("%02X", b)
 	}
 	return strings.Join(parts, ":")
+}
+
+func certSHA256Hex(cert *x509.Certificate) string {
+	sum := sha256.Sum256(cert.Raw)
+	return hex.EncodeToString(sum[:])
+}
+
+func certPublicKeySHA256(cert *x509.Certificate) string {
+	publicKeyDER, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(publicKeyDER)
+	return base64.StdEncoding.EncodeToString(sum[:])
 }
 
 func (c *Controller) certMetadataPath() string {
@@ -414,6 +434,8 @@ func certMetadataChanged(previous, next *certMetadata) bool {
 		previous.Mode != next.Mode ||
 		previous.Source != next.Source ||
 		previous.SHA256 != next.SHA256 ||
+		previous.SHA256Hex != next.SHA256Hex ||
+		previous.PublicKeySHA256 != next.PublicKeySHA256 ||
 		previous.NotAfter != next.NotAfter
 }
 
@@ -428,13 +450,15 @@ func (c *Controller) reportCertStatus(meta *certMetadata, issueErr error) {
 		errorMessage = issueErr.Error()
 	}
 	report := &panel.CertReport{
-		Status:   status,
-		Target:   meta.Target,
-		Mode:     meta.Mode,
-		Source:   meta.Source,
-		SHA256:   meta.SHA256,
-		NotAfter: meta.NotAfter,
-		Error:    errorMessage,
+		Status:          status,
+		Target:          meta.Target,
+		Mode:            meta.Mode,
+		Source:          meta.Source,
+		SHA256:          meta.SHA256,
+		SHA256Hex:       meta.SHA256Hex,
+		PublicKeySHA256: meta.PublicKeySHA256,
+		NotAfter:        meta.NotAfter,
+		Error:           errorMessage,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

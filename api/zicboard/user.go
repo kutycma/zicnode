@@ -33,13 +33,15 @@ type AliveMap struct {
 }
 
 type CertReport struct {
-	Status   string `json:"status"`
-	Target   string `json:"target"`
-	Mode     string `json:"mode"`
-	Source   string `json:"source"`
-	SHA256   string `json:"sha256"`
-	NotAfter int64  `json:"not_after"`
-	Error    string `json:"error,omitempty"`
+	Status          string `json:"status"`
+	Target          string `json:"target"`
+	Mode            string `json:"mode"`
+	Source          string `json:"source"`
+	SHA256          string `json:"sha256"`
+	SHA256Hex       string `json:"sha256_hex,omitempty"`
+	PublicKeySHA256 string `json:"public_key_sha256,omitempty"`
+	NotAfter        int64  `json:"not_after"`
+	Error           string `json:"error,omitempty"`
 }
 
 // GetUserList pulls users from ZicBoard.
