@@ -178,23 +178,23 @@ install_base() {
             echo "Đang cài đặt kho EPEL..."
             yum install -y epel-release >/dev/null 2>&1
         fi
-        need_install_yum wget curl unzip tar cronie socat ca-certificates pv
+        need_install_yum wget curl unzip tar cronie socat ca-certificates pv jq
         update-ca-trust force-enable >/dev/null 2>&1 || true
     elif [[ x"${release}" == x"alpine" ]]; then
-        need_install_apk wget curl unzip tar socat ca-certificates pv
+        need_install_apk wget curl unzip tar socat ca-certificates pv jq
         update-ca-certificates >/dev/null 2>&1 || true
     elif [[ x"${release}" == x"debian" ]]; then
-        need_install_apt wget curl unzip tar cron socat ca-certificates pv
+        need_install_apt wget curl unzip tar cron socat ca-certificates pv jq
         update-ca-certificates >/dev/null 2>&1 || true
     elif [[ x"${release}" == x"ubuntu" ]]; then
-        need_install_apt wget curl unzip tar cron socat ca-certificates pv
+        need_install_apt wget curl unzip tar cron socat ca-certificates pv jq
         update-ca-certificates >/dev/null 2>&1 || true
     elif [[ x"${release}" == x"arch" ]]; then
         echo "Đang cập nhật cơ sở dữ liệu gói..."
         pacman -Sy --noconfirm >/dev/null 2>&1
         # --needed sẽ bỏ qua các gói đã được cài đặt, rất hiệu quả
         echo "Đang cài đặt các gói bắt buộc..."
-        pacman -S --noconfirm --needed wget curl unzip tar cronie socat ca-certificates pv >/dev/null 2>&1
+        pacman -S --noconfirm --needed wget curl unzip tar cronie socat ca-certificates pv jq >/dev/null 2>&1
     fi
 }
 
@@ -396,6 +396,8 @@ EOF
     echo "zicnode disable      - Tắt tự khởi động zicnode"
     echo "zicnode log          - Xem nhật ký (logs) zicnode"
     echo "zicnode generate     - Tạo tệp cấu hình zicnode"
+    echo "zicnode add-node     - Thêm node vào VPS hiện tại"
+    echo "zicnode nodes        - Liệt kê các node đã cấu hình"
     echo "zicnode update       - Cập nhật zicnode"
     echo "zicnode update x.x.x - Cập nhật zicnode phiên bản chỉ định"
     echo "zicnode install      - Cài đặt zicnode"

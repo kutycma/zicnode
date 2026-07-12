@@ -78,7 +78,7 @@ elif [[ x"${release}" == x"debian" ]]; then
 fi
 
 confirm() {
-    if [[ $# > 1 ]]; then
+    if [[ $# -gt 1 ]]; then
         echo && read -rp "$1 [Mặc định $2]: " temp
         if [[ x"${temp}" == x"" ]]; then
             temp=$2
@@ -234,6 +234,7 @@ stop() {
 }
 
 restart() {
+    local restart_status
     if [[ x"${release}" == x"alpine" ]]; then
         service zicnode restart
     else
@@ -241,7 +242,8 @@ restart() {
     fi
     sleep 2
     check_status
-    if [[ $? == 0 ]]; then
+    restart_status=$?
+    if [[ $restart_status == 0 ]]; then
         echo -e "${green}zicnode khởi động lại thành công, vui lòng dùng 'zicnode log' để xem nhật ký hoạt động${plain}"
     else
         echo -e "${red}zicnode có thể đã khởi động thất bại, vui lòng dùng 'zicnode log' để kiểm tra lỗi${plain}"
@@ -249,6 +251,7 @@ restart() {
     if [[ $# == 0 ]]; then
         before_show_menu
     fi
+    return $restart_status
 }
 
 status() {
@@ -685,6 +688,122 @@ generate_config_file() {
     generate_zicnode_config "$api_host" "$node_id" "$api_key"
 }
 
+list_nodes() {
+    local config_file="${ZICNODE_CONFIG_FILE:-/etc/zicnode/config.json}"
+
+    if ! command -v jq >/dev/null 2>&1; then
+        echo -e "${red}Không tìm thấy jq. Hãy chạy 'zicnode update' để cài dependency còn thiếu.${plain}"
+        return 1
+    fi
+    if ! jq -e '(.Nodes | type) == "array"' "$config_file" >/dev/null 2>&1; then
+        echo -e "${red}Cấu hình ${config_file} không hợp lệ hoặc không có Nodes[].${plain}"
+        return 1
+    fi
+
+    jq -r '
+        .Nodes | to_entries[] |
+        "\(.key + 1). Panel: \(.value.ApiHost) | NodeID: \(.value.NodeID) | ApiKey: \(
+            (.value.ApiKey // "") |
+            if length <= 8 then "****" else .[0:4] + "****" + .[-4:] end
+        )"
+    ' "$config_file"
+}
+
+add_node() {
+    local config_file="${ZICNODE_CONFIG_FILE:-/etc/zicnode/config.json}"
+    local backup_file="${config_file}.bak"
+    local api_host node_id api_key response temp_file
+
+    if ! command -v jq >/dev/null 2>&1; then
+        echo -e "${red}Không tìm thấy jq. Hãy chạy 'zicnode update' để cài dependency còn thiếu.${plain}"
+        return 1
+    fi
+    if ! jq -e '(.Nodes | type) == "array"' "$config_file" >/dev/null 2>&1; then
+        echo -e "${red}Cấu hình ${config_file} không hợp lệ hoặc không có Nodes[].${plain}"
+        return 1
+    fi
+
+    read -rp "Địa chỉ API của Panel [Định dạng: https://example.com/]: " api_host
+    if [[ ! "$api_host" =~ ^https?://[^[:space:]]+$ ]]; then
+        echo -e "${red}ApiHost không hợp lệ.${plain}"
+        return 1
+    fi
+    while [[ "$api_host" == */ ]]; do
+        api_host="${api_host%/}"
+    done
+    api_host="${api_host}/"
+
+    read -rp "ID của Node: " node_id
+    if [[ ! "$node_id" =~ ^[1-9][0-9]*$ ]]; then
+        echo -e "${red}NodeID phải là số nguyên dương.${plain}"
+        return 1
+    fi
+
+    read -rsp "Mã bảo mật kết nối Node (Server Token): " api_key
+    echo ""
+    if [[ -z "$api_key" ]]; then
+        echo -e "${red}ApiKey không được để trống.${plain}"
+        return 1
+    fi
+
+    if jq -e --arg api_host "${api_host%/}" --argjson node_id "$node_id" '
+        any(.Nodes[]?;
+            (((.ApiHost // "") | sub("/+$"; "")) == $api_host) and
+            (((.NodeID | tonumber?) // -1) == $node_id)
+        )
+    ' "$config_file" >/dev/null; then
+        echo -e "${yellow}Node ${api_host} - ${node_id} đã tồn tại, cấu hình không thay đổi.${plain}"
+        return 1
+    fi
+
+    response=$(printf '%s' "$api_key" | curl -fsS --connect-timeout 8 --max-time 20 \
+        --get "${api_host%/}/api/v3/server/config" \
+        --data-urlencode "node_type=zicnode" \
+        --data-urlencode "node_id=${node_id}" \
+        --data-urlencode "token@-" 2>/dev/null)
+    if ! printf '%s' "$response" | jq -e '
+        .base_config.panel == "zicboard" and
+        .base_config.node_type == "zicnode" and
+        (.protocol | type == "string")
+    ' >/dev/null 2>&1; then
+        echo -e "${red}Không xác thực được node với ZicBoard, cấu hình không thay đổi.${plain}"
+        return 1
+    fi
+
+    umask 077
+    temp_file=$(mktemp "${config_file}.tmp.XXXXXX") || return 1
+    if ! jq --arg api_host "$api_host" --argjson node_id "$node_id" --arg api_key "$api_key" '
+        .Nodes += [{
+            "ApiHost": $api_host,
+            "NodeID": $node_id,
+            "ApiKey": $api_key,
+            "Timeout": 15
+        }]
+    ' "$config_file" > "$temp_file"; then
+        rm -f "$temp_file"
+        echo -e "${red}Không thể tạo cấu hình mới.${plain}"
+        return 1
+    fi
+    if ! cp -p "$config_file" "$backup_file" || ! mv "$temp_file" "$config_file"; then
+        rm -f "$temp_file"
+        echo -e "${red}Không thể cập nhật cấu hình; tệp hiện tại được giữ nguyên.${plain}"
+        return 1
+    fi
+
+    if restart 0; then
+        echo -e "${green}Đã thêm NodeID ${node_id}. Bản sao lưu: ${backup_file}${plain}"
+        return 0
+    fi
+
+    echo -e "${yellow}Khởi động thất bại, đang phục hồi cấu hình cũ...${plain}"
+    if cp -p "$backup_file" "$config_file" && restart 0; then
+        echo -e "${green}Đã phục hồi cấu hình cũ thành công.${plain}"
+    else
+        echo -e "${red}Không thể tự phục hồi. Hãy kiểm tra ${backup_file} và logs ngay.${plain}"
+    fi
+    return 1
+}
+
 # Mở cổng tường lửa
 open_ports() {
     systemctl stop firewalld.service 2>/dev/null
@@ -715,6 +834,8 @@ show_usage() {
     echo "zicnode log          - Xem nhật ký (logs) zicnode"
     echo "zicnode x25519       - Tạo khóa x25519"
     echo "zicnode generate     - Tạo tệp cấu hình zicnode"
+    echo "zicnode add-node     - Thêm node vào VPS hiện tại"
+    echo "zicnode nodes        - Liệt kê các node đã cấu hình"
     echo "zicnode update       - Cập nhật zicnode"
     echo "zicnode update x.x.x - Cài đặt zicnode phiên bản chỉ định"
     echo "zicnode install      - Cài đặt zicnode"
@@ -777,7 +898,7 @@ show_menu() {
 }
 
 
-if [[ $# > 0 ]]; then
+if [[ $# -gt 0 ]]; then
     case $1 in
         "start") check_install 0 && start 0 ;;
         "stop") check_install 0 && stop 0 ;;
@@ -789,6 +910,8 @@ if [[ $# > 0 ]]; then
         "update") check_install 0 && update 0 $2 ;;
         "config") config $* ;;
         "generate") generate_config_file ;;
+        "add-node") check_install 0 && add_node ;;
+        "nodes") check_install 0 && list_nodes ;;
         "install") check_uninstall 0 && install 0 ;;
         "uninstall") check_install 0 && uninstall 0 ;;
         "version") check_install 0 && show_zicnode_version 0 ;;
